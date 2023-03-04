@@ -1,6 +1,9 @@
 import UserModel from "../models/User.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import transporter from "../config/emailConfig.js";
+import dotenv from 'dotenv'
+dotenv.config()
 
 class UserController {
   static userRegistration = async (req, res) => {
@@ -100,9 +103,18 @@ class UserController {
       if(user){
         const secret = user._id + process.env.JWT_SECRET_KEY
         const token = jwt.sign({ userID: user._id}, secret, { expiresIn: '15m'})
-        const link = `http://127.0.0.1:3000/api/user/reset/$user._id/${token}`
-        console.log(link)
-        res.send({status: "success", message:"Password reset email sent successfully."})
+        const link = `http://127.0.0.1:3000/api/user/reset/${user._id}/${token}`
+        // console.log(link)
+
+        // send email
+        let info = await transporter.sendMail({
+          from: process.env.EMAIL_FROM,
+          to: user.email,
+          subject: "Shopping Password Reset Email",
+          html: `<a href=${link}>Click Here</a> to reset your password`
+        })
+
+        res.send({status: "success", message:"Password reset email sent successfully.", info:info})
       } else{
         res.send({status: "failed", message: "Email Does not exist"})
       }
@@ -118,7 +130,7 @@ class UserController {
     const user = await UserModel.findById(id)
     const new_secret = user._id + process.env.JWT_SECRET_KEY
     try {
-      jwt.verify(new_secret, new_secret)
+      jwt.verify(token, new_secret)
       if(password && password_confirmation){
         if(password !== password_confirmation){
           res.send({ status: "failed", message: "New Password and Confirmation Password Don't Match" });
@@ -130,9 +142,12 @@ class UserController {
           res.send({ status: "success", message: "Password changed successfully"})
         }
       }
+      else{
+        res.send({ status: "failed", message: "All fields are required" });
+      }
     } catch (error) {
       console.log(error)
-      res.send({status:"failed", message:"Invalid token"})
+      res.send({status:"failed", message:"Unable to update"})
     }
 
   }
